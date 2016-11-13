@@ -5,10 +5,6 @@
                 #:users
                 #:channels
                 #:*client*)
-  (:import-from :slsl.user
-                #:user
-                #:id
-                #:name)
   (:import-from :optima
                 #:match
                 #:multiple-value-match
@@ -26,10 +22,16 @@
 (in-package :slsl.format)
 
 (defun find-user-by-id (user-id)
-  (find user-id (users *client*) :key #'id :test #'string=))
+  (find user-id (users *client*) :key #'slsl.user:id :test #'string=))
 
 (defun find-channel-by-id (channel-id)
-  (find channel-id (channels *client*) :key #'id :test #'string=))
+  (find channel-id (channels *client*) :key #'slsl.channel:id :test #'string=))
+
+(defun find-user-by-name (user-name)
+  (find user-name (users *client*) :key #'slsl.user:name :test #'string=))
+
+(defun find-channel-by-name (channel-name)
+  (find channel-name (channels *client*) :key #'slsl.channel:name :test #'string=))
 
 (defun unbracket (text)
   (multiple-value-match (scan-to-strings "<(.)([A-Z0-9]+)>" text)
@@ -39,56 +41,52 @@
 (defun encode (text)
   (apply #'concatenate
          'string
-         (encode* (loop
-                     with user-table = (make-hash-table :test 'equal)
-                     for user in (users *client*)
-                     do (setf (gethash (name user) user-table) (id user))
-                     finally (return user-table))
-                  text)))
+         (encode* text)))
 
-(defun encode* (users text &optional (start 0) (end (length text)))
+(defun encode* (text &optional (start 0) (end (length text)))
   "https://api.slack.com/docs/message-formatting"
   (multiple-value-bind (start1 end1)
-      (scan "<|>|&|@([-a-zA-Z0-9._])+" text :start start :end end) ; ほんとはこうしたい "<|>|&|(?<=^|\s)@(\\w|-|\\.)+" けど cl-ppcre が対応してない
+      (scan "<|>|&|[@#]([-a-zA-Z0-9._])+" text :start start :end end) ; ほんとはこうしたい "<|>|&|(?<=^|\s)@(\\w|-|\\.)+" けど cl-ppcre が対応してない
     (if start1
         (cond
           ((null start1)
            (list (subseq text start)))
           ((string= text "<" :start1 start1 :end1 end1)
-           (list* (subseq text start start1) "&lt;" (encode* users text end1 end)))
+           (list* (subseq text start start1) "&lt;" (encode* text end1 end)))
           ((string= text ">" :start1 start1 :end1 end1)
-           (list* (subseq text start start1) "&gt;" (encode* users text end1 end)))
+           (list* (subseq text start start1) "&gt;" (encode* text end1 end)))
           ((string= text "&" :start1 start1 :end1 end1)
-           (list* (subseq text start start1) "&amp;" (encode* users text end1 end)))
+           (list* (subseq text start start1) "&amp;" (encode* text end1 end)))
           (t
-           (let ((user-id (gethash (subseq text (1+ start1) end1) users)))
+           (let* ((symbol (subseq text start1 (1+ start1)))
+                  (name (subseq text (1+ start1) end1))
+                  (user-or-channel (if (string= symbol "@")
+                                       (find-user-by-name name)
+                                       (find-channel-by-name name))))
              (if (and (or (= start1 0)
                           (member (aref text (1- start1))
                                   '(#\SPACE #\IDEOGRAPHIC_SPACE #\Tab #\Newline #\Return)))
-                      user-id)
+                      user-or-channel)
                  (list* (subseq text start start1)
-                        "<@" user-id ">"
-                        (encode* users text end1 end))
+                        "<" symbol
+                        (if (string= symbol "@")
+                            (slsl.user:id user-or-channel)
+                            (slsl.channel:id user-or-channel)) ">"
+                        (encode* text end1 end))
                  (list* (subseq text start end1)
-                        (encode* users text end1 end)))))))))
+                        (encode* text end1 end)))))))))
 
 
-(defvar *user-table* nil)
 (defvar *users-mention-to* nil)
 
 (defun decode (text)
   (let* ((*users-mention-to* nil)
-         (*user-table* (loop
-                          with user-table = (make-hash-table :test 'equal)
-                          for user in (users *client*)
-                          do (setf (gethash (id user) user-table) user)
-                          finally (return user-table)))
          (parts (decode* text)))
     (values (format nil "~{~a~}" parts) *users-mention-to*)))
 
 (defun decode* (text &optional (start 0) (end (length text)))
   (multiple-value-bind (start1 end1)
-      (scan "&lt;|&gt;|&amp;|<@[A-Z0-9]+(?:\\|[^>]+)?>" text :start start :end end) ; TODO channelに対応
+      (scan "&lt;|&gt;|&amp;|<[@#][A-Z0-9]+(?:\\|[^>]+)?>" text :start start :end end) ; TODO channelに対応
     (if start1
         (cond
           ((string= text "&lt;" :start1 start1 :end1 end1)
@@ -98,12 +96,18 @@
           ((string= text "&amp;" :start1 start1 :end1 end1)
            (list* (subseq text start start1) "&" (decode* text end1 end)))
           (t
-           (let ((user (gethash (subseq text (+ start1 2) (- end1 1)) *user-table*)))
-             (when user
-               (push user *users-mention-to*))
-             (if user
-                 (list* (subseq text start start1) "@"
-                        (name user)
+           (let* ((symbol (subseq text (+ start1 1) (+ start1 2)))
+                  (id (scan-to-strings "[A-Z0-9]+" text :start (+ start1 2)))
+                  (user-or-channel (if (string= symbol "@")
+                                       (find-user-by-id id)
+                                       (find-channel-by-id id))))
+             (when (typep user-or-channel 'slsl.user:user)
+               (push user-or-channel *users-mention-to*))
+             (if user-or-channel
+                 (list* (subseq text start start1) symbol
+                        (if (string= symbol "@")
+                            (slsl.user:name user-or-channel)
+                            (slsl.channel:name user-or-channel))
                         (decode* text end1 end))
                  (list* (subseq text start start1)
                         (subseq text start1 end1)
