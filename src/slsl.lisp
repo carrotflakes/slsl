@@ -330,6 +330,17 @@
                                       :creator purpose-creator
                                       :last-set purpose-last-set)))))
 
+    ((obj :type "channel_rename"
+          :channel (and (obj :id      channel-id
+                             :name    channel-name)
+                        (place channel-place))
+          :event_ts _)
+     (let ((channel (find-channel-by-id channel-id)))
+       (unless channel
+         (error "Channel not found: ~a" channel-id))
+       (setf (slot-value channel 'slsl.channel:name) channel-name
+             channel-place channel)))
+
     ((obj :type (or "file_public" "file_shared" "file_change")
           :user_id user-id)
      (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
