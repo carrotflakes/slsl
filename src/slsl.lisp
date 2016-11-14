@@ -257,6 +257,19 @@
      (setf channel (find-channel-by-id channel))
      (push (cons "user" (find-user-by-id bot-id)) (cdr obj)))
 
+    ((obj :type "message"
+          :subtype "message_changed"
+          :hidden t
+          :channel (place channel)
+          :message (obj :type "message"
+                        :user (place user)
+                        :text text
+                        :edited (obj :user (place edited-user))))
+     (format *debug-stream* "message: ~a~%" text)
+     (setf channel (find-channel-by-id channel)
+           user (find-user-by-id user)
+           edited-user (find-user-by-id edited-user)))
+
     ((obj :type (or "reaction_added" "reaction_removed")
           :user (place user)
           :reaction reaction
