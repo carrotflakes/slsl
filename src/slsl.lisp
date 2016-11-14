@@ -299,6 +299,23 @@
                           :purpose nil)
            (channels *client*)))
 
+    ((obj :type "im_created"
+          :user (place user)
+          :channel (and (obj :id      channel-id
+                             :user    channel-user
+                             :is_im   t
+                             :created channel-created
+                             :creator channel-creator)
+                        (place channel-place))
+          :event_ts _)
+     (setf user (find-user-by-id user))
+     (let ((channel (make-instance 'im
+                                   :id channel-id
+                                   :user (find-user-by-id channel-user))))
+       (setf channel-place channel)
+       (push channel-place
+             (channels *client*))))
+
     ((obj :type "channel_joined"
           :channel (obj :id      channel-id
                         :name    channel-name
