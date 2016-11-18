@@ -6,6 +6,12 @@ An experimental Slack Developer Kit for Common Lisp.
 
 ## Installation
 
+```
+$ ros install fukamachi/websocket-driver
+$ ros install carrotflakes/clocy
+$ ros install carrotflakes/slsl
+```
+
 ## Author
 
 * carrotflakes (carrotflakes@gmail.com)
