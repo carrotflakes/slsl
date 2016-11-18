@@ -2,6 +2,7 @@
 (defpackage slsl.channel
   (:use :cl)
   (:export #:channel
+           #:im
            #:id
            #:name
            #:topic
