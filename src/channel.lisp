@@ -10,7 +10,9 @@
            #:value
            #:creator
            #:last-set
-           #:user))
+           #:user
+           #:archived-p
+           #:members))
 (in-package :slsl.channel)
 
 (defclass topic ()

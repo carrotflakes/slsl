@@ -261,14 +261,48 @@
           :subtype "message_changed"
           :hidden t
           :channel (place channel)
-          :message (obj :type "message"
-                        :user (place user)
-                        :text text
-                        :edited (obj :user (place edited-user))))
-     (format *debug-stream* "message: ~a~%" text)
-     (setf channel (find-channel-by-id channel)
-           user (find-user-by-id user)
-           edited-user (find-user-by-id edited-user)))
+          :message message-obj)
+     (setf channel (find-channel-by-id channel))
+
+     (match message-obj
+            ((obj :type "message"
+                  :user (place user)
+                  :text _
+                  :edited (obj :user (place edited-user)))
+             (setf user (find-user-by-id user)
+                   edited-user (find-user-by-id edited-user)))
+            ((obj :type "message"
+                  :user (place user)
+                  :text _)
+             (setf user (find-user-by-id user)))
+            ((obj :type "message"
+                  :subtype "file_comment"
+                  :file _
+                  :text _
+                  :comment _))
+            (_
+             (format (or t *debug-stream*) "unknown: ~s~%" obj))))
+
+    ((obj :type "message"
+          :subtype "message_deleted"
+          :hidden t
+          :channel (place channel)
+          :deleted_ts _)
+     (setf channel (find-channel-by-id channel)))
+
+    ((obj :type "user_change"
+          :user (and (obj :id      id
+                          :name    name*
+                          :profile (list* :obj profile*)
+                          :deleted deleted-p*
+                          :is_bot  bot-p*)
+                     (place user-place)))
+     (let ((user (find-user-by-id id)))
+       (setf (slot-value user 'slsl.user:name) name*
+             (slot-value user 'slsl.user:profile) profile*
+             (slot-value user 'slsl.user:deleted-p) deleted-p*
+             (slot-value user 'slsl.user:bot-p) bot-p*)
+       (setf user-place user)))
 
     ((obj :type (or "reaction_added" "reaction_removed")
           :user (place user)
@@ -334,18 +368,22 @@
      (let ((channel (find-channel-by-id channel-id)))
        (unless channel
          (error "Channel ~a missing!" channel-id))
-       (with-slots (name archived-p members topic purpose) channel
-         (setf name channel-name
-               archived-p is-archived
-               members (mapcar #'find-user-by-id channel-members)
-               topic (make-instance 'topic
-                                    :value topic-value
-                                    :creator topic-creator
-                                    :last-set topic-last-set)
-               purpose (make-instance 'purpose
-                                      :value purpose-value
-                                      :creator purpose-creator
-                                      :last-set purpose-last-set)))))
+       (setf (slot-value channel slsl.channel:name)
+             channel-name
+             (slot-value channel slsl.channel:archived-p)
+             is-archived
+             (slot-value channel slsl.channel:members)
+             (mapcar #'find-user-by-id channel-members)
+             (slot-value channel slsl.channel:topic)
+             (make-instance 'topic
+                            :value topic-value
+                            :creator topic-creator
+                            :last-set topic-last-set)
+             (slot-value channel slsl.channel:purpose)
+             (make-instance 'purpose
+                            :value purpose-value
+                            :creator purpose-creator
+                            :last-set purpose-last-set))))
 
     ((obj :type "channel_rename"
           :channel (and (obj :id      channel-id
@@ -358,7 +396,31 @@
        (setf (slot-value channel 'slsl.channel:name) channel-name
              channel-place channel)))
 
-    ((obj :type (or "file_public" "file_shared" "file_change")
+    ((obj :type "pin_added"
+          :user (place user)
+          :channel_id channel-id
+          :item _ ; TODO
+          :item_user item-user
+          :event_ts _)
+     (setf item-user (find-user-by-id item-user))
+     (push (cons "channel" (find-channel-by-id channel-id)) (cdr obj)))
+
+    ((obj :type "file_comment_added"
+          :comment (obj :id _
+                        :created _
+                        :timestamp _
+                        :user (place comment-user)
+                        :is_intro _
+                        :comment _
+                        :channel _)
+          :file_id _
+          :user_id user-id
+          :file (obj :id _)
+          :event_ts _)
+     (setf comment-user (find-user-by-id comment-user))
+     (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
+
+    ((obj :type (or "file_public" "file_shared" "file_change" "file_created")
           :user_id user-id)
      (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
 
@@ -374,7 +436,7 @@
            user (find-user-by-id user)))
 
     ;; ignore
-    ((obj :type (or "reconnect_url" "channel_marked")) nil)
+    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change")) nil)
 
     ;; TODO
     (obj
