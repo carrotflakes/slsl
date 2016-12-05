@@ -500,6 +500,14 @@
             (with-lock-held (received-event-queue-lock)
               (push event received-event-queue))))
 
+      (on :error (ws *client*)
+          (lambda (error)
+            (format t "Got an ws error: ~S~%" error)))
+
+      (on :close (ws *client*)
+          (lambda (code reason)
+            (format t "Ws closed because '~A' (Code=~A)~%" reason code)))
+
       ;; start websocket connection
       (start-connection (ws *client*))
 
