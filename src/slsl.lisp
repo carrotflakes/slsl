@@ -396,6 +396,13 @@
        (setf (slot-value channel 'slsl.channel:name) channel-name
              channel-place channel)))
 
+    ((obj :type "team_join"
+          :user (place user-place)
+          :event_ts _)
+     (let ((user (make-user-from-json user-place)))
+       (setf user-place user)
+       (push user (users *client*))))
+
     ((obj :type "pin_added"
           :user (place user)
           :channel_id channel-id
@@ -436,7 +443,7 @@
            user (find-user-by-id user)))
 
     ;; ignore
-    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change")) nil)
+    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change" "star_added" "star_removed")) nil)
 
     ;; TODO
     (obj
