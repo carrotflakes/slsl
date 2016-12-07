@@ -443,7 +443,9 @@
            user (find-user-by-id user)))
 
     ;; ignore
-    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change" "star_added" "star_removed")) nil)
+    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change"
+                    "star_added" "star_removed" "desktop_notification"))
+     nil)
 
     ;; TODO
     (obj
