@@ -314,7 +314,7 @@
     ((obj :type (or "reaction_added" "reaction_removed")
           :user (place user)
           :reaction reaction
-          :item (obj :type "file" :file (place file)))
+          :item (obj :type (or "file" "file_comment") :file (place file)))
      (setf user (find-user-by-id user)))
 
     ((obj :type "channel_created"
@@ -368,18 +368,18 @@
      (let ((channel (find-channel-by-id channel-id)))
        (unless channel
          (error "Channel ~a missing!" channel-id))
-       (setf (slot-value channel slsl.channel:name)
+       (setf (slot-value channel 'slsl.channel:name)
              channel-name
-             (slot-value channel slsl.channel:archived-p)
+             (slot-value channel 'slsl.channel:archived-p)
              is-archived
-             (slot-value channel slsl.channel:members)
+             (slot-value channel 'slsl.channel:members)
              (mapcar #'find-user-by-id channel-members)
-             (slot-value channel slsl.channel:topic)
+             (slot-value channel 'slsl.channel:topic)
              (make-instance 'topic
                             :value topic-value
                             :creator topic-creator
                             :last-set topic-last-set)
-             (slot-value channel slsl.channel:purpose)
+             (slot-value channel 'slsl.channel:purpose)
              (make-instance 'purpose
                             :value purpose-value
                             :creator purpose-creator
@@ -402,6 +402,13 @@
      (let ((user (make-user-from-json user-place)))
        (setf user-place user)
        (push user (users *client*))))
+
+    ((obj :type "bot_added"
+          :bot (place bot-place)
+          :event_ts _)
+     (let ((bot (make-bot-from-json bot-place)))
+       (setf bot-place bot)
+       (push bot (users *client*))))
 
     ((obj :type "pin_added"
           :user (place user)
@@ -444,7 +451,8 @@
 
     ;; ignore
     ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change"
-                    "star_added" "star_removed" "desktop_notification"))
+                    "star_added" "star_removed" "desktop_notification"
+                    "dnd_updated_user"))
      nil)
 
     ;; TODO
