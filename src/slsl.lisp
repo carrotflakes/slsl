@@ -531,7 +531,14 @@
       (as:with-interval (0.1)
         ;; event disposing
         (with-lock-held (received-event-queue-lock)
-          (map nil #'dispose-event (nreverse received-event-queue))
+          (loop
+             for event in (nreverse received-event-queue)
+             do (handler-case (dispose-event event)
+                  (error (c)
+                    (format t "Error: ~a~%~a~%"
+                            c
+                            event))))
+
           (setf received-event-queue '()))
 
         ;; schedule dispatching
