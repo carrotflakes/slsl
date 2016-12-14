@@ -471,7 +471,7 @@
     ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change"
                     "star_added" "star_removed" "desktop_notification"
                     "dnd_updated_user" "manual_presence_change"
-                    "apps_changed"))
+                    "apps_changed" "commands_changed"))
      nil)
 
     ;; TODO
