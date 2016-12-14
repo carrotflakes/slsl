@@ -276,6 +276,10 @@
                   :text _)
              (setf user (find-user-by-id user)))
             ((obj :type "message"
+                  :bot (place bot)
+                  :text _)
+             (setf bot (find-user-by-id bot)))
+            ((obj :type "message"
                   :subtype "file_comment"
                   :file _
                   :text _
@@ -333,6 +337,11 @@
                           :purpose nil)
            (channels *client*)))
 
+    ((obj :type "channel_deleted"
+          :channel id
+          :event_ts _)
+     (setf (channels *client*) (remove (find-channel-by-id id) (channels *client*))))
+
     ((obj :type "im_created"
           :user (place user)
           :channel (and (obj :id      channel-id
@@ -358,13 +367,13 @@
                         :is_archived is-archived
                         :is_general  is-general
                         :is_member is-member
-                        :members channel-members)
-          :topic (obj :value topic-value
-                      :creator topic-creator
-                      :last_set topic-last-set)
-          :purpose (obj :value purpose-value
-                      :creator purpose-creator
-                      :last_set purpose-last-set))
+                        :members channel-members
+                        :topic (obj :value topic-value
+                                    :creator topic-creator
+                                    :last_set topic-last-set)
+                        :purpose (obj :value purpose-value
+                                      :creator purpose-creator
+                                      :last_set purpose-last-set)))
      (let ((channel (find-channel-by-id channel-id)))
        (unless channel
          (error "Channel ~a missing!" channel-id))
@@ -410,7 +419,16 @@
        (setf bot-place bot)
        (push bot (users *client*))))
 
-    ((obj :type "pin_added"
+    ((obj :type "bot_changed"
+          :bot (and (obj :id   id
+                         :name name*)
+                    (place bot-place))
+          :event_ts _)
+     (let ((bot (find-user-by-id id)))
+       (setf (slot-value bot 'slsl.user:name) name*)
+       (setf bot-place bot)))
+
+    ((obj :type (or "pin_added" "pin_removed")
           :user (place user)
           :channel_id channel-id
           :item _ ; TODO
@@ -434,7 +452,7 @@
      (setf comment-user (find-user-by-id comment-user))
      (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
 
-    ((obj :type (or "file_public" "file_shared" "file_change" "file_created")
+    ((obj :type (or "file_public" "file_shared" "file_change" "file_created" "file_deleted")
           :user_id user-id)
      (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
 
@@ -452,7 +470,8 @@
     ;; ignore
     ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change"
                     "star_added" "star_removed" "desktop_notification"
-                    "dnd_updated_user"))
+                    "dnd_updated_user" "manual_presence_change"
+                    "apps_changed"))
      nil)
 
     ;; TODO
