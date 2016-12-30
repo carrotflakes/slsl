@@ -4,7 +4,11 @@
   (:import-from :slsl.client
                 #:users
                 #:channels
-                #:*client*)
+                #:*client*
+                #:find-user-by-id
+                #:find-channel-by-id
+                #:find-user-by-name
+                #:find-channel-by-name)
   (:import-from :optima
                 #:match
                 #:multiple-value-match
@@ -18,20 +22,11 @@
   (:export #:encode
            #:decode
            #:user-reference
-           #:mention))
+           #:mention
+           #:user
+           #:channel))
 (in-package :slsl.format)
 
-(defun find-user-by-id (user-id)
-  (find user-id (users *client*) :key #'slsl.user:id :test #'string=))
-
-(defun find-channel-by-id (channel-id)
-  (find channel-id (channels *client*) :key #'slsl.channel:id :test #'string=))
-
-(defun find-user-by-name (user-name)
-  (find user-name (users *client*) :key #'slsl.user:name :test #'string=))
-
-(defun find-channel-by-name (channel-name)
-  (find channel-name (channels *client*) :key #'slsl.channel:name :test #'string=))
 
 (defun unbracket (text)
   (multiple-value-match (scan-to-strings "<(.)([A-Z0-9]+)>" text)
@@ -166,7 +161,7 @@
 (defmethod unparse-pattern ((pattern mention-pattern))
   `(mention ,@(mention-pattern-subpatterns pattern)))
 
-#|
+
 ;;; channel pattern
 (defstruct (channel-pattern (:include constructor-pattern)
                             (:constructor make-channel-pattern (&rest subpatterns))))
@@ -209,4 +204,3 @@
 
 (defmethod unparse-pattern ((pattern user-pattern))
   `(user ,@(user-pattern-subpatterns pattern)))
-|#

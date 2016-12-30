@@ -33,7 +33,8 @@
                  (:file "client" :depends-on ("channel" "message" "schedule"))
                  (:file "format" :depends-on ("client" "user"))
                  (:file "slsl" :depends-on ("client" "message"))
-                 (:file "webapi" :depends-on ("message" "channel" "client")))))
+                 (:file "webapi" :depends-on ("message" "channel" "client"))
+                 (:file "pattern" :depends-on ("slsl")))))
   :description "A Slack Developer Kit for Common Lisp"
   :long-description
   #.(with-open-file (stream (merge-pathnames

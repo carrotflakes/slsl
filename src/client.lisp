@@ -27,7 +27,11 @@
            #:start
            #:complete-posting-message
            #:enqueue-event
-           #:*client*))
+           #:*client*
+           #:find-user-by-id
+           #:find-channel-by-id
+           #:find-user-by-name
+           #:find-channel-by-name))
 (in-package :slsl.client)
 
 (defclass client ()
@@ -77,7 +81,7 @@
          (json (to-json `(:obj ("id" . ,event-id)
                                ("type" . "message")
                                ("text" . ,(slsl.message:text message))
-                               ("channel" . ,(slsl.channel:id (slsl.message:channel message)))))))
+                               ("channel" . ,(slsl.message:channel message))))))
     (send (ws client) json)
     (push (cons event-id message) (pendings client))))
 
@@ -134,3 +138,20 @@
 
 
 (defvar *client* nil)
+
+
+(defun find-channel-by-id (channel-id)
+  (find channel-id (channels *client*)
+        :key #'slsl.channel:id :test #'string=))
+
+(defun find-user-by-id (user-id)
+  (find user-id (users *client*)
+        :key #'slsl.user:id :test #'string=))
+
+(defun find-user-by-name (user-name)
+  (find user-name (users *client*)
+        :key #'slsl.user:name :test #'string=))
+
+(defun find-channel-by-name (channel-name)
+  (find channel-name (channels *client*)
+        :key #'slsl.channel:name :test #'string=))

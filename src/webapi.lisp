@@ -3,8 +3,6 @@
   (:use :cl)
   (:import-from :slsl.message
                 #:message)
-  (:import-from :slsl.channel
-                #:id)
   (:import-from :slsl.client
                 #:*client*)
   (:export #:post-message
@@ -20,7 +18,7 @@
   (jsown:parse
    (dexador:post "https://slack.com/api/chat.postMessage"
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
-                            ("channel" . ,(id channel))
+                            ("channel" . ,channel)
                             ("text" . ,text)
                             ,@(when username `(("username" . ,username)))
                             ,@(when icon-url `(("icon_url" . ,icon-url)))
@@ -33,13 +31,13 @@
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
                             ("content" . ,content)
                             ,@(when channels
-                                    `(("channels" . ,(format nil "~{~a~^,~}" (mapcar #'id channels)))))))))
+                                    `(("channels" . ,(format nil "~{~a~^,~}" channels))))))))
 
 (defun update (channel timestamp text)
   (jsown:parse
    (dexador:post "https://slack.com/api/chat.update"
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
-                            ("channel" . ,(id channel))
+                            ("channel" . ,channel)
                             ("ts" . ,timestamp)
                             ("text" . ,text)))))
 

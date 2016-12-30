@@ -24,7 +24,9 @@
                 #:dispatch-schedule
                 #:start
                 #:complete-posting-message
-                #:*client*)
+                #:*client*
+                #:find-user-by-id
+                #:find-channel-by-id)
   (:import-from :slsl.format
                 #:encode
                 #:decode
@@ -51,6 +53,8 @@
            #:channel
            #:user
            #:post
+           #:find-user-by-id
+           #:find-channel-by-id
            #:recieve
            #:start
            #:with-connection
@@ -219,107 +223,33 @@
 
 
 (defun dispose-event (string &aux (obj (parse string)) fall)
-  (format *debug-stream* "obj: ~s~%" obj)
-  ;(format t "obj: ~s~%" obj)
   (match obj
     ((obj :reply_to reply-to
           :text text
           :ok t
           :ts timestamp)
-     (format *debug-stream* "sure: ~a~%" timestamp)
      (complete-posting-message *client* reply-to timestamp)
      (setf fall t))
 
     ((obj :type "message"
           :reply_to reply-to
-          :channel (place channel)
-          :user (place user)
+          :channel channel
+          :user user
           :text text
           :ts timestamp)
-     (format *debug-stream* "last: ~a~%" text)
      (setf fall t))
 
-    ((obj :type "hello"))
-
-    ((obj :type "message"
-          :channel (place channel)
-          :user (place user)
-          :text text)
-     (format *debug-stream* "message: ~a~%" text)
-     (setf channel (find-channel-by-id channel)
-           user (find-user-by-id user)))
-
-    ((obj :type "message"
-          :channel (place channel)
-          :bot_id bot-id
-          :text text)
-     (format *debug-stream* "message: ~a~%" text)
-     (setf channel (find-channel-by-id channel))
-     (push (cons "user" (find-user-by-id bot-id)) (cdr obj)))
-
-    ((obj :type "message"
-          :subtype "message_changed"
-          :hidden t
-          :channel (place channel)
-          :message message-obj)
-     (setf channel (find-channel-by-id channel))
-
-     (match message-obj
-            ((obj :type "message"
-                  :user (place user)
-                  :text _
-                  :edited (obj :user (place edited-user)))
-             (setf user (find-user-by-id user)
-                   edited-user (find-user-by-id edited-user)))
-            ((obj :type "message"
-                  :user (place user)
-                  :text _)
-             (setf user (find-user-by-id user)))
-            ((obj :type "message"
-                  :bot (place bot)
-                  :text _)
-             (setf bot (find-user-by-id bot)))
-            ((obj :type "message"
-                  :subtype "file_comment"
-                  :file _
-                  :text _
-                  :comment _))
-            (_
-             (format (or t *debug-stream*) "unknown: ~s~%" obj))))
-
-    ((obj :type "message"
-          :subtype "message_deleted"
-          :hidden t
-          :channel (place channel)
-          :deleted_ts _)
-     (setf channel (find-channel-by-id channel)))
-
     ((obj :type "user_change"
-          :user (and (obj :id      id
-                          :name    name*
-                          :profile (list* :obj profile*)
-                          :deleted deleted-p*
-                          :is_bot  bot-p*)
-                     (place user-place)))
+          :user (obj :id      id
+                     :name    name*
+                     :profile (list* :obj profile*)
+                     :deleted deleted-p*
+                     :is_bot  bot-p*))
      (let ((user (find-user-by-id id)))
        (setf (slot-value user 'slsl.user:name) name*
              (slot-value user 'slsl.user:profile) profile*
              (slot-value user 'slsl.user:deleted-p) deleted-p*
-             (slot-value user 'slsl.user:bot-p) bot-p*)
-       (setf user-place user)))
-
-    ((obj :type (or "reaction_added" "reaction_removed")
-          :user (place user)
-          :reaction reaction
-          :item (obj :type "message" :channel (place channel)))
-     (setf channel (find-channel-by-id channel)
-           user (find-user-by-id user)))
-
-    ((obj :type (or "reaction_added" "reaction_removed")
-          :user (place user)
-          :reaction reaction
-          :item (obj :type (or "file" "file_comment") :file (place file)))
-     (setf user (find-user-by-id user)))
+             (slot-value user 'slsl.user:bot-p) bot-p*)))
 
     ((obj :type "channel_created"
           :channel (obj :id      channel-id
@@ -343,21 +273,17 @@
      (setf (channels *client*) (remove (find-channel-by-id id) (channels *client*))))
 
     ((obj :type "im_created"
-          :user (place user)
-          :channel (and (obj :id      channel-id
-                             :user    channel-user
-                             :is_im   t
-                             :created channel-created
-                             :creator channel-creator)
-                        (place channel-place))
+          :user user
+          :channel (obj :id      channel-id
+                        :user    channel-user
+                        :is_im   t
+                        :created channel-created
+                        :creator channel-creator)
           :event_ts _)
-     (setf user (find-user-by-id user))
-     (let ((channel (make-instance 'im
-                                   :id channel-id
-                                   :user (find-user-by-id channel-user))))
-       (setf channel-place channel)
-       (push channel-place
-             (channels *client*))))
+       (push (make-instance 'im
+                            :id channel-id
+                            :user (find-user-by-id channel-user))
+             (channels *client*)))
 
     ((obj :type "channel_joined"
           :channel (obj :id      channel-id
@@ -395,88 +321,32 @@
                             :last-set purpose-last-set))))
 
     ((obj :type "channel_rename"
-          :channel (and (obj :id      channel-id
-                             :name    channel-name)
-                        (place channel-place))
+          :channel (obj :id      channel-id
+                        :name    channel-name)
           :event_ts _)
      (let ((channel (find-channel-by-id channel-id)))
        (unless channel
          (error "Channel not found: ~a" channel-id))
-       (setf (slot-value channel 'slsl.channel:name) channel-name
-             channel-place channel)))
+       (setf (slot-value channel 'slsl.channel:name) channel-name)))
 
     ((obj :type "team_join"
-          :user (place user-place)
+          :user user
           :event_ts _)
-     (let ((user (make-user-from-json user-place)))
-       (setf user-place user)
-       (push user (users *client*))))
+     (push (make-user-from-json user)
+           (users *client*)))
 
     ((obj :type "bot_added"
-          :bot (place bot-place)
+          :bot bot
           :event_ts _)
-     (let ((bot (make-bot-from-json bot-place)))
-       (setf bot-place bot)
-       (push bot (users *client*))))
+     (push (make-bot-from-json bot)
+           (users *client*)))
 
     ((obj :type "bot_changed"
-          :bot (and (obj :id   id
-                         :name name*)
-                    (place bot-place))
+          :bot (obj :id   id
+                    :name name*)
           :event_ts _)
      (let ((bot (find-user-by-id id)))
-       (setf (slot-value bot 'slsl.user:name) name*)
-       (setf bot-place bot)))
-
-    ((obj :type (or "pin_added" "pin_removed")
-          :user (place user)
-          :channel_id channel-id
-          :item _ ; TODO
-          :item_user item-user
-          :event_ts _)
-     (setf item-user (find-user-by-id item-user))
-     (push (cons "channel" (find-channel-by-id channel-id)) (cdr obj)))
-
-    ((obj :type "file_comment_added"
-          :comment (obj :id _
-                        :created _
-                        :timestamp _
-                        :user (place comment-user)
-                        :is_intro _
-                        :comment _
-                        :channel _)
-          :file_id _
-          :user_id user-id
-          :file (obj :id _)
-          :event_ts _)
-     (setf comment-user (find-user-by-id comment-user))
-     (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
-
-    ((obj :type (or "file_public" "file_shared" "file_change" "file_created" "file_deleted")
-          :user_id user-id)
-     (push (cons "user" (find-user-by-id user-id)) (cdr obj)))
-
-    ((obj :type "presence_change"
-          :user (place user)
-          :presence _)
-     (setf user (find-user-by-id user)))
-
-    ((obj :type "user_typing"
-          :channel (place channel)
-          :user (place user))
-     (setf channel (find-channel-by-id channel)
-           user (find-user-by-id user)))
-
-    ;; ignore
-    ((obj :type (or "reconnect_url" "channel_marked" "im_marked" "pref_change"
-                    "star_added" "star_removed" "desktop_notification"
-                    "dnd_updated_user" "manual_presence_change"
-                    "apps_changed" "commands_changed"))
-     nil)
-
-    ;; TODO
-    (obj
-     (format (or t *debug-stream*) "unknown: ~s~%" obj)))
+       (setf (slot-value bot 'slsl.user:name) name*))))
     (unless fall
      (dispatch-event obj)))
 
@@ -576,29 +446,19 @@
         :key #'slsl.user:name
         :test #'string=))
 
-(defun find-user-by-id (user-id)
-  (find user-id (users *client*)
-        :key #'slsl.user:id
-        :test #'string=))
-
 (defun channel (channel-name)
   (find channel-name (channels *client*)
         :key #'slsl.channel:name
         :test #'string=))
 
-(defun find-channel-by-id (channel-id)
-  (find channel-id (channels *client*)
-        :key #'slsl.channel:id
-        :test #'string=))
-
-(defun %post (channel text &optional then)
+(defun %post (channel-id text &optional then)
   (enqueue-message *client*
                    (make-instance 'message
-                                  :channel channel
+                                  :channel channel-id
                                   :text text
                                   :then then)))
 
-(defmacro post (channel text &body body)
+(defmacro post (channel-id text &body body)
   (if body
-      `(%post ,channel ,text :then (lambda () ,@body))
-      `(%post ,channel ,text)))
+      `(%post ,channel-id ,text :then (lambda () ,@body))
+      `(%post ,channel-id ,text)))
