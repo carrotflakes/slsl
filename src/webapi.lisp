@@ -18,7 +18,7 @@
   (jsown:parse
    (dexador:post "https://slack.com/api/chat.postMessage"
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
-                            ("channel" . ,channel)
+                            ("channel" . ,(slsl.channel:id channel))
                             ("text" . ,text)
                             ,@(when username `(("username" . ,username)))
                             ,@(when icon-url `(("icon_url" . ,icon-url)))
@@ -31,13 +31,13 @@
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
                             ("content" . ,content)
                             ,@(when channels
-                                    `(("channels" . ,(format nil "~{~a~^,~}" channels))))))))
+                                    `(("channels" . ,(format nil "~{~a~^,~}" (mapcar #'slsl.channel:id channels)))))))))
 
 (defun update (channel timestamp text)
   (jsown:parse
    (dexador:post "https://slack.com/api/chat.update"
                  :content `(("token" . ,(slot-value *client* 'slsl.client::token))
-                            ("channel" . ,channel)
+                            ("channel" . ,(slsl.channel:id channel))
                             ("ts" . ,timestamp)
                             ("text" . ,text)))))
 
@@ -49,7 +49,7 @@
                             ("name" . ,name)
                             ,@(when file `(("file" . ,file)))
                             ,@(when file-comment `(("file_comment" . ,file-comment)))
-                            ,@(when channel `(("channel" . ,channel)))
+                            ,@(when channel `(("channel" . ,(slsl.channel:id channel))))
                             ,@(when timestamp `(("timestamp" . ,timestamp)))))))
 
 (defun reactions-remove (name
@@ -60,5 +60,5 @@
                             ("name" . ,name)
                             ,@(when file `(("file" . ,file)))
                             ,@(when file-comment `(("file_comment" . ,file-comment)))
-                            ,@(when channel `(("channel" . ,channel)))
+                            ,@(when channel `(("channel" . ,(slsl.channel:id channel))))
                             ,@(when timestamp `(("timestamp" . ,timestamp)))))))

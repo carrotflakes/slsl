@@ -5,13 +5,13 @@
                 #:obj)
   (:import-from :optima
                 #:defpattern)
-  (:export #:event-message))
+  (:export #:message))
 (in-package :slsl.pattern)
 
 
-(defpattern event-message (&rest args)
+(defpattern message (&rest args)
   `(obj :type "message"
-             :channel ,(first args)
-             :user ,(second args)
-             :text ,(third args)
-             :ts ,(fourth args)))
+        :channel (slsl.format:channel ,(first args))
+        :user (slsl.format:user ,(second args))
+        :text ,(third args)
+        :ts ,(or (fourth args) '_)))

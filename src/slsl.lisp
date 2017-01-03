@@ -451,14 +451,14 @@
         :key #'slsl.channel:name
         :test #'string=))
 
-(defun %post (channel-id text &optional then)
+(defun %post (channel text &optional then)
   (enqueue-message *client*
                    (make-instance 'message
-                                  :channel channel-id
+                                  :channel channel
                                   :text text
                                   :then then)))
 
-(defmacro post (channel-id text &body body)
+(defmacro post (channel text &body body)
   (if body
-      `(%post ,channel-id ,text :then (lambda () ,@body))
-      `(%post ,channel-id ,text)))
+      `(%post ,channel ,text :then (lambda () ,@body))
+      `(%post ,channel ,text)))

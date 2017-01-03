@@ -81,7 +81,7 @@
          (json (to-json `(:obj ("id" . ,event-id)
                                ("type" . "message")
                                ("text" . ,(slsl.message:text message))
-                               ("channel" . ,(slsl.message:channel message))))))
+                               ("channel" . ,(slsl.channel:id (slsl.message:channel message)))))))
     (send (ws client) json)
     (push (cons event-id message) (pendings client))))
 
