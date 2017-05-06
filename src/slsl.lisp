@@ -47,8 +47,14 @@
                 #:on
                 #:start-connection)
   (:import-from :bordeaux-threads
+                #:make-thread
                 #:make-lock
                 #:with-lock-held)
+  (:import-from :clocy
+                #:once
+                #:all
+                #:after
+                #:repeat)
   (:export #:make-client
            #:channel
            #:user
@@ -67,7 +73,11 @@
            #:remove-event-listener
            #:remove-schedule
            #:obj
-           #:*debug-stream*))
+           #:*debug-stream*
+           #:once
+           #:all
+           #:after
+           #:repeat))
 (in-package :slsl)
 
 
@@ -204,9 +214,6 @@
                                   :users users
                                   :channels channels
                                   :self self)))
-      (wsd:on :error ws-client
-              (lambda (json)
-                (format *debug-stream* "websocket error: ~a~%" json)))
       client)))
 
 
@@ -350,38 +357,38 @@
     (unless fall
      (dispatch-event obj)))
 
-(defmacro on-event (name pattern &body body)
+(defmacro on-event (name &body clauses)
   `(progn
      (setf (gethash ',name *event-listener-table*)
            (lambda (event)
              (match event
-               (,pattern
-                ,@body))))
+               ,@clauses)))
      ',name))
 
-(defmacro on-event* (pattern &body body)
+(defmacro on-event* (&body clauses)
   `(on-event ,(gensym "ANONYMOUS")
-             ,pattern
-             ,@body))
+             ,@clauses))
 
-(defmacro on-event-once (name pattern &body body)
-  `(on-event ,name
-             ,pattern
-             ,@body
+(defmacro on-event-once (name &body clauses)
+  `(progn
+     (setf (gethash ',name *event-listener-table*)
+           (lambda (event)
+             (match event
+               ,@clauses)
              (remove-event-listener ',name)))
+     ',name))
 
-(defmacro on-event-once* (pattern &body body)
+(defmacro on-event-once* (&body clauses)
   `(on-event-once ,(gensym "ANONYMOUS")
-                  ,pattern
-                  ,@body))
+                  ,@clauses))
 
 
-(defmacro on-time (name spec-form &body body)
-  `(add-schedule *client* ',name ,spec-form (lambda () ,@body)))
+(defmacro on-time (name generator &body body)
+  `(add-schedule *client* ',name ,generator (lambda () ,@body)))
 
-(defmacro on-time* (spec-form &body body)
+(defmacro on-time* (generator &body body)
   `(on-time ,(gensym "ANONYMOUS")
-            ,spec-form
+            ,generator
             ,@body))
 
 
@@ -391,54 +398,49 @@
 (defun remove-schedule (name)
   (slsl.client:remove-schedule *client* name))
 
-(defun start (&optional thunk)
-  (let ((received-event-queue '())
+(defun start ()
+  (let ((bt:*default-special-bindings* `((*client* . ,*client*) (*event-listener-table* . ,*event-listener-table*)))
+        (received-event-queue '())
         (received-event-queue-lock (make-lock)))
-    (as:with-event-loop ()
-      ;; signal handling
-      (as:signal-handler 2 (lambda (sig)
-                             (declare (ignore sig))
-                             (as:exit-event-loop)))
 
-      ;; enqueue received event
-      (on :message (ws *client*)
-          (lambda (event)
-            (with-lock-held (received-event-queue-lock)
-              (push event received-event-queue))))
+    ;; enqueue received event
+    (on :message (ws *client*)
+        (lambda (event)
+          (with-lock-held (received-event-queue-lock)
+            (push event received-event-queue))))
 
-      (on :error (ws *client*)
-          (lambda (error)
-            (format t "Got an ws error: ~S~%" error)))
+    (on :error (ws *client*)
+        (lambda (error)
+          (format t "Got an ws error: ~S~%" error)))
 
-      (on :close (ws *client*)
-          (lambda (code reason)
-            (format t "Ws closed because '~A' (Code=~A)~%" reason code)))
+    (on :close (ws *client*)
+        (lambda (code reason)
+          (format t "Ws closed because '~A' (Code=~A)~%" reason code)))
 
-      ;; start websocket connection
-      (start-connection (ws *client*))
+    ;; start websocket connection
+    (start-connection (ws *client*))
 
-      (as:with-interval (0.1)
-        ;; event disposing
-        (with-lock-held (received-event-queue-lock)
-          (loop
-             for event in (nreverse received-event-queue)
-             do (handler-case (dispose-event event)
-                  (error (c)
-                    (format t "Error: ~a~%~a~%"
-                            c
-                            event))))
+    (make-thread
+     (lambda ()
+       (loop
+          (sleep 0.1)
+          ;; event disposing
+          (with-lock-held (received-event-queue-lock)
+            (loop
+               for event in (nreverse received-event-queue)
+               do (handler-case (dispose-event event)
+                    (error (c)
+                      (format t "Error: ~a~%~a~%"
+                              c
+                              event))))
 
-          (setf received-event-queue '()))
+            (setf received-event-queue '()))
 
-        ;; schedule dispatching
-        (dispatch-schedule *client*)
+          ;; schedule dispatching
+          (dispatch-schedule *client*)
 
-        ;; send event
-        (send-messages *client*))
-
-      (when thunk
-        ;; user function
-        (funcall thunk)))))
+          ;; send event
+          (send-messages *client*))))))
 
 
 (defun user (user-name)

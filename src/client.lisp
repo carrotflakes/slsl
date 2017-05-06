@@ -13,8 +13,7 @@
   (:import-from :slsl.schedule
                 #:schedule)
   (:import-from :clocy
-                #:make-generator
-                #:generate-next)
+                #:next)
   (:export #:client
            #:ws
            #:self
@@ -110,12 +109,11 @@
     (setf (schedule-queue client)
           (sort (cons schedule (schedule-queue client)) #'< :key #'slsl.schedule:next-time)))
 
-(defun add-schedule (client name spec-form then &optional (now (get-universal-time)))
-  (let* ((generator (make-generator spec-form now))
-         (schedule (make-instance 'schedule
+(defun add-schedule (client name generator then &optional (now (get-universal-time)))
+  (let* ((schedule (make-instance 'schedule
                                   :name name
                                   :generator generator
-                                  :time (generate-next generator)
+                                  :time (next generator)
                                   :then then)))
     (enqueue-schedule client schedule)))
 
@@ -129,7 +127,7 @@
                (<= (slsl.schedule:next-time (first schedule-queue)) now))
       (let* ((schedule (pop schedule-queue))
              (then (slsl.schedule:then schedule))
-             (next-time (generate-next (slsl.schedule:generator schedule))))
+             (next-time (next (slsl.schedule:generator schedule))))
         (when next-time
           (setf (slsl.schedule:next-time schedule) next-time)
           (enqueue-schedule client schedule))
